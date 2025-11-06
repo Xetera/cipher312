@@ -1,0 +1,9 @@
+[package]
+name = "cipher312"
+version = "0.1.0"
+edition = "2021"
+crate-type = ["cdylib"]
+
+[dependencies]
+nom = "8"
+wit-bindgen = "0.47"

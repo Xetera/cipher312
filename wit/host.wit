@@ -1,0 +1,29 @@
+package xetera:cipher312;
+
+interface codec {
+  resource normalized-ciphertext {
+    constructor(ciphertext: string);
+    text: func() -> string;
+  }
+  variant grapheme {
+    codepoint(char)
+  }
+  record decode-result {
+    parsed: list<grapheme>,
+    // to-string: func() -> string;
+  }
+
+  decode: func(
+    ciphertext: borrow<normalized-ciphertext>
+  ) -> result<decode-result>;
+  decode-v1: func(
+    ciphertext: borrow<normalized-ciphertext>
+  ) -> result<decode-result>;
+  decode-v2: func(
+    ciphertext: borrow<normalized-ciphertext>
+  ) -> result<decode-result>;
+}
+
+world cipher312 {
+  export codec;
+}
