@@ -1,9 +1,9 @@
-use crate::exports::xetera::cipher312::codec::{Guest, GuestNormalizedCiphertext};
+use crate::exports::xetera::cipher312::codec::GuestNormalizedCiphertext;
 
 pub struct NormalizedCiphertext(String);
 
 impl NormalizedCiphertext {
-    pub fn new(input: String) -> NormalizedCiphertext {
+    pub fn new(input: &str) -> NormalizedCiphertext {
         let extra_bytes = input
             .chars()
             .filter(|&c| matches!(c, '4' | '5' | '6'))
@@ -28,9 +28,9 @@ impl NormalizedCiphertext {
 
 impl GuestNormalizedCiphertext for NormalizedCiphertext {
     fn new(ciphertext: String) -> Self {
-        NormalizedCiphertext::new(ciphertext)
+        NormalizedCiphertext::new(&ciphertext)
     }
-    fn text(&self) -> &str {
-        NormalizedCiphertext::text(self)
+    fn text(&self) -> String {
+        self.0.clone()
     }
 }

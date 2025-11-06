@@ -6,11 +6,13 @@ interface codec {
     text: func() -> string;
   }
   variant grapheme {
-    codepoint(char)
+    codepoint(char),
+    unknown(string),
+    invalid-unicode
   }
-  record decode-result {
-    parsed: list<grapheme>,
-    // to-string: func() -> string;
+  resource decode-result {
+    get-codepoints: func() -> list<grapheme>;
+    to-string: func() -> string;
   }
 
   decode: func(

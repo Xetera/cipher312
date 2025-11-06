@@ -2,7 +2,7 @@ mod normalizer;
 mod symbols;
 
 use nom::{
-    bytes::{complete::tag, take_until},
+    bytes::complete::{tag, take_until, take_while_m_n},
     multi::many1,
     sequence::delimited,
     IResult, Parser,
@@ -32,6 +32,27 @@ fn char<T: Into<char>>(value: T) -> Grapheme {
 #[derive(Debug)]
 pub struct DecodeResult {
     parsed: Vec<Grapheme>,
+}
+
+impl From<&Grapheme> for codec::Grapheme {
+    fn from(result: &Grapheme) -> Self {
+        match result {
+            Grapheme::KnownValue(value) => codec::Grapheme::Codepoint(*value),
+            Grapheme::UnknownSequence(sequence) => codec::Grapheme::Unknown(sequence.clone()),
+            Grapheme::InvalidUnicode(_error) => codec::Grapheme::InvalidUnicode,
+        }
+    }
+}
+impl codec::GuestDecodeResult for DecodeResult {
+    fn get_codepoints(&self) -> Vec<codec::Grapheme> {
+        self.parsed
+            .iter()
+            .map(|codepoint| codepoint.into())
+            .collect()
+    }
+    fn to_string(&self) -> String {
+        ToString::to_string(self)
+    }
 }
 
 type ReplacementRule<'a> = (&'a [u8], &'a str);
@@ -98,10 +119,8 @@ impl Mappings {
                 }
             }
         }
-        Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Tag,
-        )))
+        let (rest, trinary) = take_while_m_n(1, 3, |_| true).parse(input)?;
+        Ok((rest, Grapheme::UnknownSequence(trinary.to_owned())))
     }
 }
 
@@ -111,13 +130,14 @@ pub enum UnicodeParseError {
     InvalidHexadecimal,
 }
 
+// TODO: this requires a lot
 pub fn unicode_parser<'a>(
 ) -> impl Parser<&'a str, Output = Grapheme, Error = nom::error::Error<&'a str>> {
     const D: &str = "791";
-    delimited(tag(D), take_until(D), tag(D)).map(|res| {
+    delimited(tag(D), take_until(D), tag(D)).map(|res: &str| {
         let normalized = NormalizedCiphertext::new(res);
-        match Codec::decode_v2(normalized) {
-            Ok(("", decoded)) => {
+        match Codec::decode_v2(&normalized) {
+            Ok(decoded) => {
                 let digits = decoded.to_string();
                 let Ok(digit) = u32::from_str_radix(&digits, 16) else {
                     return Grapheme::InvalidUnicode(UnicodeParseError::InvalidHexadecimal);
@@ -127,35 +147,84 @@ pub fn unicode_parser<'a>(
                 };
                 Grapheme::KnownValue(chr)
             }
-            Ok((_, _)) | Err(_) => Grapheme::InvalidUnicode(UnicodeParseError::InvalidCipher),
+            Err(_) => Grapheme::InvalidUnicode(UnicodeParseError::InvalidCipher),
         }
     })
 }
 
 pub struct Codec;
-impl Codec {}
-
-impl Guest for Codec {
-    type NormalizedCiphertext = normalizer::NormalizedCiphertext;
-    fn decode_v1(input: NormalizedCiphertextBorrow) -> Result<DecodeResult, ()> {
+impl Codec {
+    fn decode_v1(
+        input: &NormalizedCiphertext,
+    ) -> Result<DecodeResult, nom::Err<nom::error::Error<&str>>> {
         let mappings = Mappings::new(&V1_SYMBOL_MAPPING, &REPLACEMENT_RULES);
         many1(move |c| mappings.parse(c))
             .map(|graphemes: Vec<Grapheme>| DecodeResult { parsed: graphemes })
-            .parse(input)
-            .map_err(|_| ())
-            .map(|e| e.1)
+            .parse(&input.text())
+            .map(|a| a.1)
     }
-
-    fn decode_v2(input: codec::NormalizedCiphertextBorrow) -> IResult<DecodeResult, ()> {
+    fn decode_v2(
+        input: &NormalizedCiphertext,
+    ) -> Result<DecodeResult, nom::Err<nom::error::Error<&str>>> {
         let mappings = Mappings::new(&V2_SYMBOL_MAPPING, &REPLACEMENT_RULES);
         let mut unicode = unicode_parser();
         many1(move |c| unicode.parse(c).or_else(|_| mappings.parse(c)))
             .map(|graphemes: Vec<Grapheme>| DecodeResult { parsed: graphemes })
             .parse(input.text())
+            .map(|a| a.1)
+    }
+    fn decode(
+        input: &NormalizedCiphertext,
+    ) -> Result<DecodeResult, nom::Err<nom::error::Error<&str>>> {
+        match Codec::decode_v1(input) {
+            Ok(result) => Ok(result),
+            Err(_) => Codec::decode_v2(input),
+        }
+    }
+    // fn encode_v2(input: &str) -> Result<String, ()> {
+    //     input
+    //         .chars()
+    //         .into_iter()
+    //         .map(|char| {
+    //             if let Some(symbol) =
+    //                 V2_SYMBOL_MAPPING
+    //                     .iter()
+    //                     .find_map(|&(v, k)| if k == char { Some(v) } else { None })
+    //             {
+    //                 Ok(symbol.to_string())
+    //             } else {
+    //                 Err(())
+    //             }
+    //         })
+    //         .collect::<String>()
+    // }
+}
+
+impl Guest for Codec {
+    type NormalizedCiphertext = normalizer::NormalizedCiphertext;
+    type DecodeResult = DecodeResult;
+    fn decode_v1(input: NormalizedCiphertextBorrow) -> Result<codec::DecodeResult, ()> {
+        let text = input.get::<NormalizedCiphertext>();
+        match Codec::decode_v1(text) {
+            Ok(result) => Ok(codec::DecodeResult::new(result)),
+            Err(_) => Err(()),
+        }
+    }
+
+    fn decode_v2(input: codec::NormalizedCiphertextBorrow) -> Result<codec::DecodeResult, ()> {
+        let text = input.get::<NormalizedCiphertext>();
+        match Codec::decode_v2(text) {
+            Ok(result) => Ok(codec::DecodeResult::new(result)),
+            Err(_) => Err(()),
+        }
     }
     // TODO: tag this based on the correct version?
-    fn decode(input: codec::NormalizedCiphertextBorrow) -> Result<DecodeResult, ()> {
-        Codec::decode_v1(input).or_else(|_| Codec::decode_v2(input))
+    fn decode(input: codec::NormalizedCiphertextBorrow) -> Result<codec::DecodeResult, ()> {
+        let text = input.get::<NormalizedCiphertext>();
+        match Codec::decode(text) {
+            Ok(result) => Ok(codec::DecodeResult::new(result)),
+            Err(_) => Err(()),
+        }
     }
 }
 
@@ -165,7 +234,7 @@ impl ToString for DecodeResult {
             .iter()
             .map(|g| match g {
                 Grapheme::KnownValue(c) => c.to_string(),
-                Grapheme::UnknownSequence(t) => format!("?-{}-?", t),
+                Grapheme::UnknownSequence(t) => format!("¿{}?", t),
                 Grapheme::InvalidUnicode(_) => "⊠".to_string(),
             })
             .collect::<Vec<String>>()
@@ -174,33 +243,33 @@ impl ToString for DecodeResult {
 }
 
 export!(Codec);
-export!(NormalizedCiphertext);
 
 #[cfg(test)]
 mod tests {
     // const mojibake: &'static str = "18581é‡ æ--°è£½ä½œ";
-    use crate::exports::xetera::cipher312::codec::{self, Guest};
+    use crate::{
+        exports::xetera::cipher312::codec::{self, Guest},
+        normalizer::NormalizedCiphertext,
+    };
     use nom::{multi::many1, IResult, Parser};
 
-    use crate::{
-        exports::xetera::cipher312::codec::NormalizedCiphertext, Codec, DecodeResult, Mappings,
-        REPLACEMENT_RULES,
-    };
+    use crate::{Codec, DecodeResult, Mappings, REPLACEMENT_RULES};
     // text only tests that should be passed by both decoders
     const SHARED_TESTS: &[(&str, &str)] = &[
         ("54634341653520343124126312", "MISSION START"),
         ("1321521321353", "HELLO"),
         ("31561652412661031323424431215", "TRINARY UPDATE"),
         ("3515413121321526031323424431215", "WEATHER UPDATE"),
+        ("3515413121321526031323424431215", "WEATHER UPDATE"),
     ];
     fn run_test(
         input: &str,
-        f: fn(i: &codec::NormalizedCiphertext) -> Result<DecodeResult, ()>,
+        f: fn(i: &NormalizedCiphertext) -> Result<DecodeResult, nom::Err<nom::error::Error<&str>>>,
     ) -> DecodeResult {
-        let normalized = NormalizedCiphertext::new(input.to_string());
+        let normalized = NormalizedCiphertext::new(input);
         let result = match f(&normalized) {
-            Ok(result) => (result),
-            Err(err) => panic!("Deciphering failed for input: {}, {}", input, err),
+            Ok(result) => result,
+            Err(err) => panic!("Deciphering failed for input: {}, {:?}", input, err),
         };
         // if leftover != "" {
         //     eprintln!("{:?} : leftover {}", result, leftover);
@@ -230,9 +299,10 @@ mod tests {
                 "26153431326261546121512104423123154612165352",
                 "RESURRECTED AFFECTION",
             ),
+            ("41fk", "A¿fk?"),
         ];
         for (input, expected) in [SHARED_TESTS, cases].concat() {
-            assert_eq!(run_test(input, Codec::decode).to_string(), expected);
+            assert_eq!(run_test(input, Codec::decode_v2).to_string(), expected);
         }
     }
     #[test]
