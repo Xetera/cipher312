@@ -1,6 +1,8 @@
 mod normalizer;
 mod symbols;
 
+use core::fmt;
+
 use nom::{
     bytes::complete::{tag, take_until, take_while_m_n},
     multi::many1,
@@ -163,7 +165,7 @@ impl Codec {
         let mappings = Mappings::new(&V1_SYMBOL_MAPPING, &REPLACEMENT_RULES);
         many1(move |c| mappings.parse(c))
             .map(|graphemes: Vec<Grapheme>| DecodeResult { parsed: graphemes })
-            .parse(&input.text())
+            .parse(input.text())
             .map(|a| a.1)
     }
     /// Decodes the new version of the trinary found after
@@ -235,8 +237,8 @@ impl Guest for Codec {
     }
 }
 
-impl ToString for DecodeResult {
-    fn to_string(&self) -> String {
+impl fmt::Display for DecodeResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.parsed
             .iter()
             .map(|g| match g {
@@ -247,6 +249,7 @@ impl ToString for DecodeResult {
             })
             .collect::<Vec<String>>()
             .join("")
+            .fmt(f)
     }
 }
 
