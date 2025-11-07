@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   release:
-    types: [ created ]
+    types: [created]
 
 env:
   CARGO_TERM_COLOR: always
@@ -62,7 +62,7 @@ jobs:
           targets: wasm32-wasip1
 
       - name: Build WASM
-        run: cargo build --release --target wasm32-wasip1
+        run: cargo component build --release
 
       - name: Upload WASM to release
         uses: actions/upload-release-asset@v1
