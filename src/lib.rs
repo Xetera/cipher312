@@ -68,17 +68,14 @@ const REPLACEMENT_RULES: [ReplacementRule<'static>; 3] = [
 #[derive(Debug)]
 struct Mapping {
     source: &'static str,
-    variants: Vec<&'static str>,
+    variants: Vec<String>,
     target: char,
 }
 
 /// 111 -> [41, 14]
 ///
 /// only works on 2 digit replacers
-fn generate_variants_static(
-    text: &'static str,
-    replacements: &[ReplacementRule],
-) -> Vec<&'static str> {
+fn generate_variants_static(text: &str, replacements: &[ReplacementRule]) -> Vec<String> {
     let bytes = text.as_bytes();
     let mut results = vec![];
 
@@ -87,8 +84,7 @@ fn generate_variants_static(
             if bytes[i..i + 2] == *source {
                 let mut variant = text.to_string();
                 variant.replace_range(i..i + 2, target);
-                // crimes
-                results.push(Box::leak(variant.into_boxed_str()) as &'static str);
+                results.push(variant);
             }
         }
     }
@@ -116,8 +112,8 @@ impl Mappings {
             if let Ok((rest, _)) = tag::<_, _, nom::error::Error<_>>(mapping.source)(input) {
                 return Ok((rest, char(mapping.target)));
             }
-            for &variant in &mapping.variants {
-                if let Ok((rest, _)) = tag::<_, _, nom::error::Error<_>>(variant)(input) {
+            for variant in mapping.variants.iter() {
+                if let Ok((rest, _)) = tag::<_, _, nom::error::Error<_>>(variant.as_str())(input) {
                     return Ok((rest, char(mapping.target)));
                 }
             }
