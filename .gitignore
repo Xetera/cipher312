@@ -1,3 +1,4 @@
 /target
 src/bindings.rs
 .zed
+cipher312.h

@@ -1,5 +1,3 @@
-use crate::exports::xetera::cipher312::codec::GuestNormalizedCiphertext;
-
 pub struct NormalizedCiphertext(String);
 
 impl NormalizedCiphertext {
@@ -23,14 +21,5 @@ impl NormalizedCiphertext {
     }
     pub fn text(&self) -> &str {
         &self.0
-    }
-}
-
-impl GuestNormalizedCiphertext for NormalizedCiphertext {
-    fn new(ciphertext: String) -> Self {
-        NormalizedCiphertext::new(&ciphertext)
-    }
-    fn text(&self) -> String {
-        self.0.clone()
     }
 }

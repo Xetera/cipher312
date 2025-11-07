@@ -51,3 +51,34 @@ let decoded = codec.decode(normalized);
 console.log(decoded.toString());
 // ROUTINE CLEARANCE DATA ABSORPTION
 ```
+
+#### C API
+
+The C API is a lot less expressive than the WASM library because I'm lazy and don't have much experience with it.
+
+You can generate the C API header file by cloning the repository and running the following command:
+
+```shell
+cargo build --release
+```
+
+This should generate the `cipher312.h` header file in the root directory and the relevant shared library under `target/release`.
+
+```c
+#include "cipher312.h"
+
+void main() {
+  for (int i = 0; i < 1000; i++) {
+    char *result = NULL;
+    DecodeResultC err = decode_string("794842328138412791", &result);
+    assert(err == Success);
+    assert(strcmp(result, "👻") == 0);
+    free_string(result);
+  }
+  return 0;
+}
+```
+
+There are examples in the [consumers/c](./consumers/c) directory.
+
+Might include cross-compiled shared libraries in the releases if I figure out how to work with it.

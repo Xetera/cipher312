@@ -1,8 +1,10 @@
+#[cfg(not(target_arch = "wasm32"))]
+pub mod cffi;
 mod normalizer;
 mod symbols;
-
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 use core::fmt;
-
 use nom::{
     bytes::complete::{tag, take_until, take_while_m_n},
     multi::many1,
@@ -10,12 +12,7 @@ use nom::{
     IResult, Parser,
 };
 
-wit_bindgen::generate!({
-    world: "cipher312"
-});
-
 use crate::{
-    exports::xetera::cipher312::codec::{self, Guest, NormalizedCiphertextBorrow},
     normalizer::NormalizedCiphertext,
     symbols::{SymbolMapping, V1_SYMBOL_MAPPING, V2_SYMBOL_MAPPING},
 };
@@ -34,27 +31,6 @@ fn char<T: Into<char>>(value: T) -> Grapheme {
 #[derive(Debug)]
 pub struct DecodeResult {
     parsed: Vec<Grapheme>,
-}
-
-impl From<&Grapheme> for codec::Grapheme {
-    fn from(result: &Grapheme) -> Self {
-        match result {
-            Grapheme::KnownValue(value) => codec::Grapheme::Codepoint(*value),
-            Grapheme::UnknownSequence(sequence) => codec::Grapheme::Unknown(sequence.clone()),
-            Grapheme::InvalidUnicode(_error) => codec::Grapheme::InvalidUnicode,
-        }
-    }
-}
-impl codec::GuestDecodeResult for DecodeResult {
-    fn get_codepoints(&self) -> Vec<codec::Grapheme> {
-        self.parsed
-            .iter()
-            .map(|codepoint| codepoint.into())
-            .collect()
-    }
-    fn to_string(&self) -> String {
-        ToString::to_string(self)
-    }
 }
 
 type ReplacementRule<'a> = (&'a [u8], &'a str);
@@ -186,51 +162,6 @@ impl Codec {
             Err(_) => Codec::decode_v1(input),
         }
     }
-    // fn encode_v2(input: &str) -> Result<String, ()> {
-    //     input
-    //         .chars()
-    //         .into_iter()
-    //         .map(|char| {
-    //             if let Some(symbol) =
-    //                 V2_SYMBOL_MAPPING
-    //                     .iter()
-    //                     .find_map(|&(v, k)| if k == char { Some(v) } else { None })
-    //             {
-    //                 Ok(symbol.to_string())
-    //             } else {
-    //                 Err(())
-    //             }
-    //         })
-    //         .collect::<String>()
-    // }
-}
-
-impl Guest for Codec {
-    type NormalizedCiphertext = normalizer::NormalizedCiphertext;
-    type DecodeResult = DecodeResult;
-    fn decode_v1(input: NormalizedCiphertextBorrow) -> Result<codec::DecodeResult, ()> {
-        let text = input.get::<NormalizedCiphertext>();
-        match Codec::decode_v1(text) {
-            Ok(result) => Ok(codec::DecodeResult::new(result)),
-            Err(_) => Err(()),
-        }
-    }
-
-    fn decode_v2(input: codec::NormalizedCiphertextBorrow) -> Result<codec::DecodeResult, ()> {
-        let text = input.get::<NormalizedCiphertext>();
-        match Codec::decode_v2(text) {
-            Ok(result) => Ok(codec::DecodeResult::new(result)),
-            Err(_) => Err(()),
-        }
-    }
-    // TODO: tag this based on the correct version?
-    fn decode(input: codec::NormalizedCiphertextBorrow) -> Result<codec::DecodeResult, ()> {
-        let text = input.get::<NormalizedCiphertext>();
-        match Codec::decode(text) {
-            Ok(result) => Ok(codec::DecodeResult::new(result)),
-            Err(_) => Err(()),
-        }
-    }
 }
 
 impl fmt::Display for DecodeResult {
@@ -248,8 +179,6 @@ impl fmt::Display for DecodeResult {
             .fmt(f)
     }
 }
-
-export!(Codec);
 
 #[cfg(test)]
 mod tests {

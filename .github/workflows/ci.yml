@@ -48,6 +48,9 @@ jobs:
       - name: Run clippy
         run: cargo clippy -- -D warnings
 
+      - name: Build C API
+        run: cargo build --release
+
   publish:
     name: Publish to crates.io and GitHub Release
     runs-on: ubuntu-latest
