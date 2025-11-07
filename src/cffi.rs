@@ -16,6 +16,9 @@ pub enum DecodeResultC {
 
 /// decodes a trinary encoded const char* into a string
 /// uses ?abc? for invalid trinary pairs that can't be decoded
+/// # Safety
+/// Requires a valid pointer for both input and out parameters
+/// Both can be empty strings otherwise
 #[no_mangle]
 pub unsafe extern "C" fn decode_string(
     input: *const c_char,
@@ -45,6 +48,8 @@ pub unsafe extern "C" fn decode_string(
     }
 }
 
+/// # Safety
+/// Should only be called with the string returned by a decode function result
 #[no_mangle]
 pub unsafe extern "C" fn free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
