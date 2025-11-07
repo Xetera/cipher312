@@ -48,6 +48,6 @@ let normalized = new codec.NormalizedCiphertext(
 
 let decoded = codec.decode(normalized);
 
-console.log(decoded.get());
+console.log(decoded.toString());
 // ROUTINE CLEARANCE DATA ABSORPTION
 ```
