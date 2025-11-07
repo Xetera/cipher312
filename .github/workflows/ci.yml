@@ -61,6 +61,9 @@ jobs:
         with:
           targets: wasm32-wasip1
 
+      - name: Install wasm dependencies
+        run: cargo install cargo-component wasm-tools
+
       - name: Build WASM
         run: cargo component build --release
 
