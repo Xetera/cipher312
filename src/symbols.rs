@@ -38,6 +38,8 @@ pub const V1_SYMBOL_MAPPING: [SymbolMapping; 36] = [
     ("338", '9'),
     ("0", ' '),
 ];
+
+// The alphabet here is identical to V1
 pub const V2_SYMBOL_MAPPING: [SymbolMapping; 59] = [
     ("111", 'A'),
     ("112", 'B'),

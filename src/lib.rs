@@ -70,8 +70,9 @@ struct Mapping {
     target: char,
 }
 
-// 111 -> [41, 14]
-// only works on 2 digit replacers
+/// 111 -> [41, 14]
+///
+/// only works on 2 digit replacers
 fn generate_variants_static(
     text: &'static str,
     replacements: &[ReplacementRule],
@@ -154,7 +155,9 @@ pub fn unicode_parser<'a>(
 
 pub struct Codec;
 impl Codec {
-    fn decode_v1(
+    /// Decodes specifically the early version of the
+    /// trinary found before https://www.youtube.com/watch?v=VGK3Ag06VaU
+    pub fn decode_v1(
         input: &NormalizedCiphertext,
     ) -> Result<DecodeResult, nom::Err<nom::error::Error<&str>>> {
         let mappings = Mappings::new(&V1_SYMBOL_MAPPING, &REPLACEMENT_RULES);
@@ -163,7 +166,9 @@ impl Codec {
             .parse(&input.text())
             .map(|a| a.1)
     }
-    fn decode_v2(
+    /// Decodes the new version of the trinary found after
+    /// https://www.youtube.com/watch?v=VGK3Ag06VaU
+    pub fn decode_v2(
         input: &NormalizedCiphertext,
     ) -> Result<DecodeResult, nom::Err<nom::error::Error<&str>>> {
         let mappings = Mappings::new(&V2_SYMBOL_MAPPING, &REPLACEMENT_RULES);
@@ -173,12 +178,14 @@ impl Codec {
             .parse(input.text())
             .map(|a| a.1)
     }
-    fn decode(
+    /// Tries to decode the message using the new decoder and
+    /// fallsback to the old if it doesn't work
+    pub fn decode(
         input: &NormalizedCiphertext,
     ) -> Result<DecodeResult, nom::Err<nom::error::Error<&str>>> {
-        match Codec::decode_v1(input) {
+        match Codec::decode_v2(input) {
             Ok(result) => Ok(result),
-            Err(_) => Codec::decode_v2(input),
+            Err(_) => Codec::decode_v1(input),
         }
     }
     // fn encode_v2(input: &str) -> Result<String, ()> {
@@ -235,6 +242,7 @@ impl ToString for DecodeResult {
             .map(|g| match g {
                 Grapheme::KnownValue(c) => c.to_string(),
                 Grapheme::UnknownSequence(t) => format!("¿{}?", t),
+                // TODO: handle this better
                 Grapheme::InvalidUnicode(_) => "⊠".to_string(),
             })
             .collect::<Vec<String>>()
@@ -246,12 +254,8 @@ export!(Codec);
 
 #[cfg(test)]
 mod tests {
-    // const mojibake: &'static str = "18581é‡ æ--°è£½ä½œ";
-    use crate::{
-        exports::xetera::cipher312::codec::{self, Guest},
-        normalizer::NormalizedCiphertext,
-    };
-    use nom::{multi::many1, IResult, Parser};
+    use crate::normalizer::NormalizedCiphertext;
+    use nom::{multi::many1, Parser};
 
     use crate::{Codec, DecodeResult, Mappings, REPLACEMENT_RULES};
     // text only tests that should be passed by both decoders
@@ -260,7 +264,21 @@ mod tests {
         ("1321521321353", "HELLO"),
         ("31561652412661031323424431215", "TRINARY UPDATE"),
         ("3515413121321526031323424431215", "WEATHER UPDATE"),
-        ("3515413121321526031323424431215", "WEATHER UPDATE"),
+        ("3121534312", "TEST"),
+        (
+            "16555152604353261505441652312155241524315",
+            "INNER CORE MAINTENANCE",
+        ),
+        (
+            "2656161216521504321315412641524315012443124104412345326231312165352",
+            "ROUTINE CLEARANCE DATA ABSORPTION",
+        ),
+        (
+            "26153431326261546121512104423123154612165352",
+            "RESURRECTED AFFECTION",
+        ),
+        ("31561652412661031323424431215121", "TRINARY UPDATED"),
+        ("41fk", "A¿fk?"),
     ];
     fn run_test(
         input: &str,
@@ -271,10 +289,6 @@ mod tests {
             Ok(result) => result,
             Err(err) => panic!("Deciphering failed for input: {}, {:?}", input, err),
         };
-        // if leftover != "" {
-        //     eprintln!("{:?} : leftover {}", result, leftover);
-        //     panic!("Unexpected leftover ciphertext")
-        // }
         result
     }
     #[test]
@@ -285,22 +299,7 @@ mod tests {
     }
     #[test]
     fn test_decipher_v2() {
-        let cases = &[
-            ("794842328138412791", "👻"),
-            (
-                "16555152604353261505441652312155241524315",
-                "INNER CORE MAINTENANCE",
-            ),
-            (
-                "2656161216521504321315412641524315012443124104412345326231312165352",
-                "ROUTINE CLEARANCE DATA ABSORPTION",
-            ),
-            (
-                "26153431326261546121512104423123154612165352",
-                "RESURRECTED AFFECTION",
-            ),
-            ("41fk", "A¿fk?"),
-        ];
+        let cases = &[("794842328138412791", "👻")];
         for (input, expected) in [SHARED_TESTS, cases].concat() {
             assert_eq!(run_test(input, Codec::decode_v2).to_string(), expected);
         }
